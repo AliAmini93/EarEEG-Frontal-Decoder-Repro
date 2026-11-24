@@ -1,0 +1,49 @@
+# Package metadata. Nothing here is installed or built by the maintainers' checks; tests run from the source tree
+# (pytest's `pythonpath = ["src"]`).
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "eareeg-frontal-decoder-repro"
+version = "0.1.0"
+description = "Experimental code for ear-centred EEG montage comparisons, blink-like-transient analyses and LDA/EEGNet face-versus-tree decoding (no data or figures)"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [{name = "Ali Amini"}]
+classifiers = [
+    "Private :: Do Not Upload",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Medical Science Apps.",
+]
+# Tested: Python 3.11, numpy 1.26, scipy 1.16, scikit-learn 1.6. numpy 2 has not been tested.
+dependencies = [
+    "numpy>=1.24,<2",
+    "scipy>=1.10",
+    "scikit-learn>=1.3",
+]
+
+[project.optional-dependencies]
+eegnet = ["torch>=2.0"]
+filter = ["mne>=1.5"]
+test = ["pytest>=7.0"]
+all = ["torch>=2.0", "mne>=1.5", "pytest>=7.0"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-p no:cacheprovider"
+markers = [
+    "lda: uses the shrinkage-LDA decoder",
+    "eegnet: uses the EEGNet-type network (needs torch)",
+    "joint: uses joint participant x stimulus-group hold-out",
+    "loso: uses leave-one-participant-out",
+    "sensitivity: computational sensitivity or selection screen",
+    "oracle: compares against an independent oracle",
+]

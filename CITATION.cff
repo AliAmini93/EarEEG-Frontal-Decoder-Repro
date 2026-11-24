@@ -1,0 +1,24 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+type: software
+title: "EarEEG-Frontal-Decoder-Repro: experimental code for ear-centred EEG montage, blink-like-transient and LDA/EEGNet decoding analyses"
+version: 0.1.0
+date-released: 2026-11-24
+license: MIT
+authors:
+  - family-names: Amini
+    given-names: Ali
+repository-code: "https://github.com/AliAmini93/EarEEG-Frontal-Decoder-Repro"
+abstract: >-
+  Python code for the experimental methods of a manuscript in preparation on ear-centred EEG decoding:
+  own-mean montage re-referencing and drop-one montages, label-blind preprocessing, large blink-like frontal
+  transient flags, shrinkage LDA and an EEGNet-type network, leave-one-participant-out and joint participant x
+  stimulus-group hold-out, train->test regime comparisons on transient-free epochs, and participant-level
+  statistics. No data, results or figures are included.
+keywords:
+  - eeg
+  - ear-eeg
+  - eegnet
+  - research-software
+  - reproducible-research
+  - python

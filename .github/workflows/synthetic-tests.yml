@@ -1,0 +1,33 @@
+# Synthetic-only tests. Manual trigger only (no automatic runs).
+# No data, secrets or network access beyond installing the public Python dependencies listed below.
+# Actions are pinned to full commit SHAs (checkout v7.0.1, setup-python v7.1.0); dependency versions are exact.
+# The pinned versions are chosen to support Python 3.10 and 3.11 (scipy 1.15.3, pytest 8.3.5); the maintainers'
+# local runs used scipy 1.16.0 and pytest 9.1.1 on Python 3.11. No run of this workflow has been dispatched yet.
+name: synthetic-tests
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11"]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: "Install minimal dependencies (torch and mne tests are skipped)"
+        run: python -m pip install "numpy==1.26.4" "scipy==1.15.3" "scikit-learn==1.6.1" "pytest==8.3.5"
+      - name: Run synthetic tests
+        env:
+          OPENBLAS_NUM_THREADS: "1"
+        run: python -m pytest -q
