@@ -144,14 +144,6 @@ docs/                 QUICKSTART, DATA_ACCESS, METHODS_TO_CODE_MAP, REPRODUCIBIL
                       PRIVACY_AND_LIMITATIONS
 tools/mutation_check.py  re-runs the tests against deliberately broken copies of the package
 ```
-
-## Authorship and AI assistance
-
-Written by Ali Amini with substantial assistance from an AI coding assistant (Claude). The equivalence comparison
-with the original (private) analysis code and the AI reviews described in [`docs/VALIDATION.md`](docs/VALIDATION.md)
-were run during packaging; their evidence is kept in the author's private project records and cannot be re-run by
-readers. No independent human code review has been reported.
-
 ## Licence and citation
 
 MIT licence ([`LICENSE`](LICENSE)). Please cite the software using [`CITATION.cff`](CITATION.cff); the manuscript is
