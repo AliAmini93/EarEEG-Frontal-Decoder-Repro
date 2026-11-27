@@ -115,16 +115,6 @@ synthetic inputs. `v0.1.0` contains the same algorithm code; it removes the synt
 helper together with the 7 tests that exercised them (116 test items remain). No test, mutation check or
 equivalence check was re-run for `v0.1.0`. Details and caveats: [`docs/VALIDATION.md`](docs/VALIDATION.md).
 
-## Scientific limitations (short)
-
-The analyses are post hoc on one cohort; image type is confounded with task relevance, rarity, repetition of a
-few tree photographs and serial order; amplitudes are on a nominal, uncalibrated microvolt scale; the hardware
-reference, polarity convention and display latency were not verified; the frontal flag is not an eye measurement
-and transient-free epochs may still contain blinks; an eye-tracker alignment based on trigger records could be
-circular; no same-clock EOG was available; and comparing retrained and transferred decoders cannot tell ocular from
-cortical information (see the synthetic scenarios in the tests). See
-[`docs/PRIVACY_AND_LIMITATIONS.md`](docs/PRIVACY_AND_LIMITATIONS.md).
-
 ## Not supplied
 
 Raw or epoched EEG, eye-tracking records, stimuli, behavioural tables, participant identifiers, trained model
