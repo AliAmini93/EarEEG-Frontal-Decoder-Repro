@@ -51,3 +51,22 @@ Treat every array derived from recordings — epochs, flags, predictions, per-pa
 data under your data agreement. Do not commit such files to any repository (this repository's `.gitignore` blocks
 common data formats, but that is a guard rail, not permission). Small cohort aggregates can be re-identifying;
 obtain the controller's approval before publishing any.
+
+## Optional inputs for supplementary analyses
+
+`stream_history` uses `stream` and `position` for all presentations, including
+those that failed QC. The position must be unique within each participant and
+stream. `weighted_gap` requires a nonempty photograph key for every analyzed
+tree epoch. Preserve row alignment across both montages and training regimes.
+
+The library functions `sensitivities.cross_device_control` and
+`clock.fit_trigger_map` work on caller-authorized in-memory arrays. Use a
+one-to-one event map and a common time grid for ear and scalp epochs. Supply
+the frontal derivations, the preprocessed EOG array, the scalp QC mask, and
+documentation of event correspondence, nominal scale and channel placement.
+Provide independently observed pulse times in seconds for each device and
+explicit matching tolerances for clock fitting. Eye samples and blink
+endpoints passed to `clock.classify_eye_epochs` must already use the
+normalized tracker pulse clock. These functions perform numerical checks
+on the inputs. Provenance and hardware interpretation remain the caller's
+responsibility.

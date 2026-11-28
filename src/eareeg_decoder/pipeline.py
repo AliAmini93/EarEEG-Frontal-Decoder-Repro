@@ -18,7 +18,7 @@ import numpy as np
 
 from . import montage as mt
 from .data import EpochSet
-from .features import bin_means
+from .features import bin_means, raw_window
 from .regimes import ba_by_participant, cv_scores
 from .splits import assign_stimulus_groups
 from .transients import resolve_theta, thresholded_descriptor, transient_flags
@@ -118,3 +118,45 @@ def transient_rates(es: EpochSet, theta: float | str = 100.0, which: str = "post
         rf.append(float(fl[~tree].mean()))
     rt_a, rf_a = np.array(rt), np.array(rf)
     return {"rate_tree": rt_a, "rate_face": rf_a, "difference": rt_a - rf_a}
+
+
+@dataclass
+class RawStack:
+    """Raw-window network inputs of the retained epochs (participant-level data: keep private)."""
+
+    X: dict[str, np.ndarray]     # montage -> epochs x channels x samples, window [0, 0.8) s
+    y: np.ndarray
+    g: np.ndarray
+    free: np.ndarray             # transient-free flag (False for every epoch of a participant without Fpz-mastoid)
+    keys: np.ndarray
+    sg: np.ndarray
+    participants: np.ndarray
+
+
+def build_raw_stack(es: EpochSet, montages: Sequence[str], theta: float | str = 100.0,
+                    require_frontal: bool = True, dtype: type = np.float32) -> RawStack:
+    """Network / xDAWN inputs: the samples in [0, 0.8) s of each montage for the retained epochs (the decoder panel's
+    input; 200 samples at 250 Hz), with labels, participant codes, transient-free flags and stimulus groups exactly as
+    :func:`build_stack` (``require_frontal=False`` for the drop-one panel, ``True`` for the transfer-gap panel)."""
+    parts = [int(p) for p in es.participants if not require_frontal or frontal_usable(es, int(p))]
+    X = {m: [] for m in montages}
+    y, g, free, keys = [], [], [], []
+    for p in parts:
+        idx = es.subset_participant(p)
+        Xp = np.asarray(es.X)[idx]
+        good = es.good_channels(p)
+        keep = np.asarray(es.keep)[idx]
+        fm = mt.fpz_mastoid(Xp, es.channel_names, good)
+        fl_any = (np.ones(len(idx), bool) if np.isnan(fm).all()
+                  else transient_flags(fm, es.times, resolve_theta(fm, theta)).any)
+        for m in montages:
+            X[m].append(raw_window(mt.make_montage(m, Xp[keep], es.channel_names, good), es.times).astype(dtype))
+        y.append(np.asarray(es.y)[idx][keep])
+        g.append(np.full(int(keep.sum()), p))
+        free.append(np.logical_not(fl_any[keep]))
+        keys.append(np.asarray(es.stimulus_key)[idx][keep])
+    y_all = np.concatenate(y).astype(int)
+    keys_all = np.concatenate(keys)
+    sg = assign_stimulus_groups(list(keys_all), is_face=y_all == 1)
+    return RawStack(X={m: np.concatenate(v) for m, v in X.items()}, y=y_all, g=np.concatenate(g),
+                    free=np.concatenate(free), keys=keys_all, sg=sg, participants=np.array(parts))

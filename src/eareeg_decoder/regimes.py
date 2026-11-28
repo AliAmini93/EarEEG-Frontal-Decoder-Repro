@@ -224,18 +224,52 @@ def lda_regimes(F: Mapping[str, np.ndarray], y: np.ndarray, g: np.ndarray, free:
     return res
 
 
+def composition_mc_se(res: RegimeResult) -> float:
+    """Monte Carlo SE (over matched draws) of the cohort mean composition contrast c of a regime result."""
+    from .inference import draw_uncertainty  # noqa: PLC0415
+    c_by_draw = res.advantage["free->free"][:, None] - res.matched_free_by_draw
+    return draw_uncertainty(c_by_draw)[1]["mc_se_cohort_mean"]
+
+
+def lda_regimes_adaptive(F, y, g, free, sg=None, **kw) -> tuple[RegimeResult, dict[str, Any]]:
+    """:func:`lda_regimes` with the original draw-extension rule (opt-in): run 20 matched draws and, if the Monte
+    Carlo SE of the cohort composition contrast exceeds 0.0025, rerun with 50 draws (draws 0..19 are identical in
+    both runs because draw k always uses ``default_rng(seed_base + k)``). Returns the result and a record of the
+    decision. The plain :func:`lda_regimes` keeps the fixed number of draws (unchanged 0.1.0 behaviour)."""
+    rule = PROTOCOL["regimes"]["draw_extension"]
+    if "n_draws" in kw:
+        raise ValueError("lda_regimes_adaptive chooses n_draws itself")
+    res = lda_regimes(F, y, g, free, sg, n_draws=rule["from"], **kw)
+    se = composition_mc_se(res)
+    record = {"n_draws_initial": rule["from"], "mc_se_initial": se, "threshold": rule["mc_se_threshold"],
+              "extended": bool(se > rule["mc_se_threshold"])}
+    if record["extended"]:
+        res = lda_regimes(F, y, g, free, sg, n_draws=rule["to"], **kw)
+        record["mc_se_final"] = composition_mc_se(res)
+    record["n_draws_used"] = int(res.matched_free_by_draw.shape[1])
+    return res, record
+
+
 # ------------------------------------------------------------------------------------------------ networks
 FitFn = Callable[[np.ndarray, np.ndarray, np.ndarray, int, dict, str], np.ndarray]
 
 
+def check_fold_probabilities(values, n_test: int) -> np.ndarray:
+    """Reject broadcastable scalar or mismatched model outputs."""
+    prob = np.asarray(values, dtype=float)
+    if prob.shape != (n_test,):
+        raise FloatingPointError("model returned the wrong number of probabilities")
+    return prob
+
+
 def net_probs(X: np.ndarray, y: np.ndarray, g: np.ndarray, train_mask: np.ndarray, test_mask: np.ndarray, seed0: int,
               cfg: dict, *, sg: np.ndarray | None = None, device: str = "cpu", min_face: int = 0, min_tree: int = 0,
-              fit: FitFn = eegnet_fit_predict) -> np.ndarray:
+              fit: FitFn = eegnet_fit_predict, compact_joint: bool = False) -> np.ndarray:
     """Held-out P(face) of the network (NaN where untested), seed per fit = ``seed0 + fold index``.
 
     LOSO (``sg`` None): fold index = position of the participant in sorted order; a participant with fewer than
     ``min_face``/``min_tree`` test epochs is skipped but still consumes its index. Joint: the index counts every
-    (participant, group) pair in sorted order, including pairs with no test epochs.
+    (participant, group) pair in sorted order, including pairs with no test epochs. Set ``compact_joint`` for montage-stage numbering of nonempty folds.
     """
     y, g = np.asarray(y), np.asarray(g)
     train_mask, test_mask = np.asarray(train_mask, bool), np.asarray(test_mask, bool)
@@ -247,7 +281,7 @@ def net_probs(X: np.ndarray, y: np.ndarray, g: np.ndarray, train_mask: np.ndarra
             if (y[te] == 1).sum() < min_face or (y[te] == 0).sum() < min_tree or not te.any():
                 continue
             assert_no_leakage(g, np.flatnonzero(tr), np.flatnonzero(te))
-            prob[te] = fit(X[tr], y[tr], X[te], seed0 + fold, cfg, device)
+            prob[te] = check_fold_probabilities(fit(X[tr], y[tr], X[te], seed0 + fold, cfg, device), int(te.sum()))
         return prob
     sgv = np.asarray(sg)
     fold = 0
@@ -257,8 +291,9 @@ def net_probs(X: np.ndarray, y: np.ndarray, g: np.ndarray, train_mask: np.ndarra
             tr = (g != p) & (sgv != s) & (sgv >= 0) & train_mask
             if te.any():
                 assert_no_leakage(g, np.flatnonzero(tr), np.flatnonzero(te), sgv)
-                prob[te] = fit(X[tr], y[tr], X[te], seed0 + fold, cfg, device)
-            fold += 1
+                prob[te] = check_fold_probabilities(fit(X[tr], y[tr], X[te], seed0 + fold, cfg, device), int(te.sum()))
+            if not compact_joint or te.any():
+                fold += 1
     return prob
 
 

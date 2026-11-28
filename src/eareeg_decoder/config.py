@@ -110,7 +110,8 @@ PROTOCOL: dict[str, Any] = {
     "regimes": {"names": ["all->all", "free->free", "matched->matched", "all->free", "matched->free"],
                 "matched_draws_lda": 20, "matched_seed_base": 20261111,
                 "matched_draws_network": {"matched->matched": 1, "matched->free (LOSO)": 20, "matched->free (joint)": 5},
-                "draw_extension_rule": "extend LDA draws to 50 if the Monte Carlo SE of the composition contrast exceeds 0.0025 (not automated here)",
+                "draw_extension_rule": "extend LDA draws to 50 if the Monte Carlo SE of the composition contrast exceeds 0.0025 (automated, opt-in: regimes.lda_regimes_adaptive)",
+                "draw_extension": {"from": 20, "to": 50, "mc_se_threshold": 0.0025},
                 "eligibility_min_face": 40, "eligibility_min_tree": 15},
     "inference": {"unit": "participant", "bootstrap_ci": "95% percentile over participants",
                   "bootstrap_montage": {"n_boot": 10000, "seed_per_montage_base": 20261111,
@@ -120,10 +121,65 @@ PROTOCOL: dict[str, Any] = {
                   "bootstrap_followup": {"n_boot": 20000, "seed": 20261117},
                   "two_way_bootstrap": ("participants x stimulus groups (d_F) or participants x tree photographs "
                                         "(transient rate): mean over resampled cells; the follow-up's photograph-"
-                                        "weighted two-way bootstrap of the paired gap is not implemented"),
+                                        "weighted two-way bootstrap of the paired gap is available separately"),
                   "signflip": "exact two-sided over all 2^n sign patterns",
                   "holm": "within each named family only", "alpha": 0.05,
                   "inversion_ci": "set of mean shifts not rejected by the exact sign-flip test at 0.05"},
+    "panel": {
+        "status": ("post hoc decoder panel, specified in a contract frozen after all earlier results and before its "
+                   "own outcomes; code added in version 0.2.0"),
+        "decoders": ["eegnet_step1", "xdawn_ts_lr", "eeg_inception_erp"],
+        "reference_decoders": {"lda": "shrinkage LDA (lda section)", "eegnet_followup": "eegnet_transient_stage"},
+        "eegnet_step1": "eegnet_montage_stage settings (dropout 0.25)",
+        "xdawn_ts_lr": {"nfilter": 4, "C": 1.0, "estimator": "oas", "xdawn_estimator": "oas", "metric": "riemann",
+                        "tsupdate": False,
+                        "classifier": "LogisticRegression(class_weight='balanced', solver='lbfgs', max_iter=2000)",
+                        "scaling": ("per-channel z-score from training epochs (NaN -> 0) before xDAWN; tangent "
+                                    "vectors standardised on training epochs"),
+                        "riemann_mean": {"tol": 1e-08, "maxiter": 50, "step_adaptation": [0.95, 0.5]},
+                        "known_property": ("with own-mean referenced montages the leading filter of each class aligns "
+                                           "with the near-null common-mode direction (effectively nfilter - 1 "
+                                           "informative filters per class); reported, not corrected")},
+        "eeg_inception_erp": {"scales_s": [0.5, 0.25, 0.125], "n_filters": 8, "depth_multiplier": 2,
+                              "pools": [4, 2, 2, 2], "dropout": 0.5, "activation": "ELU", "bn_momentum": 0.01,
+                              "lr": 0.001, "batch": 128, "epochs": 30,
+                              "loss": "class-weighted cross-entropy N/(2 n_c)",
+                              "scaling": "per-channel z-score from training epochs (NaN -> 0)",
+                              "trainable_parameters": {"11_channels_200_samples": 25542,
+                                                       "10_channels_200_samples": 25494,
+                                                       "8_channels_128_samples_128_hz": 14926},
+                              "adaptation": ("re-implemented from the published specification and trained with this "
+                                             "package's network protocol; not the original calibration/transfer "
+                                             "protocol")},
+        "input": {"window_s": [0.0, 0.8], "samples_at_250_hz": 200},
+        "threshold": {"drop_one": "face if P(face) >= 0.5 (montage-stage rule)",
+                      "regimes": "face if P(face) > 0.5 (follow-up rule)"},
+        "seeds": {"drop_one": "montage-stage joint rule: 20261107 + s + 1000 + fold",
+                  "regimes": "follow-up rule: 20261111 + s + fold", "offsets": [0, 100, 200],
+                  "deterministic": ["xdawn_ts_lr"]},
+        "matched_draws": {"loso": 20, "joint": 5, "lda_joint_reference": 20, "seed_base": 20261111},
+        "families": {"drop_one_primary_d_F": 3, "drop_one_secondary_d_M_d_FM": 6, "gap_primary_delta": 6,
+                     "gap_secondary_c": 6, "gap_secondary_s": 6, "gap_secondary_vs_lda": 6,
+                     "nested_tuned_delta": 3},
+        "bootstrap": {"drop_one": {"n_boot": 10000, "seeds_primary": [20261261, 20261262, 20261263],
+                                   "seeds_secondary": [20261264, 20261265, 20261266, 20261267, 20261268, 20261269]},
+                      "gap": {"n_boot": 20000, "seed": 20261117}},
+        "label_rules": {"drop_one": ("FPZ_LOSS_EXCEEDS_IN_EAR_LOSS if mean < 0, Holm p < 0.05 and CI upper < 0; "
+                                     "IN_EAR_LOSS_EXCEEDS_FPZ_LOSS if mean > 0, Holm p < 0.05 and CI lower > 0; "
+                                     "otherwise NO_DETECTABLE_DIFFERENCE"),
+                        "gap": "follow-up rule (inference.decision_label)",
+                        "absent_member": "INCOMPLETE; counted as p = 1 in its frozen family (inference.holm_frozen)"},
+        "nested": {"design": ("joint outer folds; three inner splits per outer fold; selection on all retained "
+                              "outer-source epochs; chosen configuration used unchanged for free->free and all->free"),
+                   "salt": "v6dr-inner", "inner_seed": 20261126, "min_face_inner": 10, "min_tree_inner": 5,
+                   "min_train_per_class": 50, "min_scored": 3, "tie_tolerance": 1e-12,
+                   "grids": {"xdawn_ts_lr": [{"nfilter": 4, "C": 1.0}, {"nfilter": 2, "C": 0.1},
+                                             {"nfilter": 2, "C": 1.0}, {"nfilter": 4, "C": 0.1}],
+                             "eeg_inception_erp": [{"dropout": 0.5, "lr": 0.001}, {"dropout": 0.5, "lr": 0.0005},
+                                                   {"dropout": 0.25, "lr": 0.0005}, {"dropout": 0.25, "lr": 0.001}],
+                             "eegnet_step1": [{"dropout": 0.25, "lr": 0.001}, {"dropout": 0.5, "lr": 0.0005},
+                                              {"dropout": 0.5, "lr": 0.001}, {"dropout": 0.25, "lr": 0.0005}]}},
+    },
 }
 
 

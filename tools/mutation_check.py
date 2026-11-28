@@ -93,11 +93,10 @@ MUTANTS: dict[str, tuple[str, list[tuple[str, str]]]] = {
         "regimes.py", [("            tr = (g != p) & train_mask\n            if (y[te] == 1)", "            tr = train_mask.copy()\n            if (y[te] == 1)"),
                        ("            assert_no_leakage(g, np.flatnonzero(tr), np.flatnonzero(te))\n", "")]),
     "network CV: seed ignores the fold index": (
-        "regimes.py", [("prob[te] = fit(X[tr], y[tr], X[te], seed0 + fold, cfg, device)\n        return prob",
-                        "prob[te] = fit(X[tr], y[tr], X[te], seed0, cfg, device)\n        return prob")]),
+        "regimes.py", [("seed0 + fold, cfg, device), int(te.sum()))\n        return prob",
+                        "seed0, cfg, device), int(te.sum()))\n        return prob")]),
     "network CV: joint index counts only non-empty cells": (
-        "regimes.py", [("                prob[te] = fit(X[tr], y[tr], X[te], seed0 + fold, cfg, device)\n            fold += 1",
-                        "                prob[te] = fit(X[tr], y[tr], X[te], seed0 + fold, cfg, device)\n                fold += 1")]),
+        "regimes.py", [("if not compact_joint or te.any():", "if te.any():")]),
     "splits: stimulus keys not checked in joint folds": (
         "splits.py", [("sg, keys if sg is not None else None)", "sg, None)")]),
     "pipeline: stimulus groups not a function of the key (check removed)": (
@@ -117,6 +116,64 @@ MUTANTS: dict[str, tuple[str, list[tuple[str, str]]]] = {
     "pipeline: relative threshold from retained epochs only": (
         "pipeline.py", [("fl_any = transient_flags(fm, es.times, resolve_theta(fm, theta)).any",
                          "fl_any = transient_flags(fm, es.times, resolve_theta(fm[keep], theta)).any")]),
+    # ---- candidate 0.2.0rc1: decoder panel
+    "xdawn: test epochs enter the channel scaler": (
+        "xdawn.py", [("    scale = channel_scaler(Xtr)\n    Ztr, Zte = scale(Xtr), scale(Xte)",
+                      "    scale = channel_scaler(np.concatenate([Xtr, Xte]))\n    Ztr, Zte = scale(Xtr), scale(Xte)")]),
+    "xdawn: filters sorted by increasing eigenvalue": (
+        "xdawn.py", [("order = np.argsort(w)[::-1]", "order = np.argsort(w)")]),
+    "xdawn: Riemannian reference includes test covariances": (
+        "xdawn.py", [("Cref, n_iter, conv = mean_riemann(Str)", "Cref, n_iter, conv = mean_riemann(np.concatenate([Str, Ste]))")]),
+    "xdawn: tangent off-diagonal weight 1 instead of sqrt(2)": (
+        "xdawn.py", [("coef = np.where(iu[0] == iu[1], 1.0, np.sqrt(2.0))", "coef = np.where(iu[0] == iu[1], 1.0, 1.0)")]),
+    "xdawn: wrong OAS shrinkage numerator": (
+        "xdawn.py", [("num = alpha + mu ** 2", "num = alpha - mu ** 2")]),
+    "inception: block-2 kernel k // 2 instead of k // 4": (
+        "inception.py", [("nn.Conv2d(c1, n_filters, (1, k // 4), padding=\"same\", bias=False)",
+                          "nn.Conv2d(c1, n_filters, (1, k // 2), padding=\"same\", bias=False)")]),
+    "inception: standardisation fitted on test epochs": (
+        "inception.py", [("Ztr, Zte = standardise_channels(Xtr, Xte)", "Zte, Ztr = standardise_channels(Xte, Xtr)")]),
+    "panel: drop-one scored with the exclusive threshold": (
+        "panel.py", [("b = ba_from_probs(y, g, prob, inclusive=True)", "b = ba_from_probs(y, g, prob, inclusive=False)")]),
+    "panel: transfer gap scored with the inclusive threshold": (
+        "panel.py", [("out[m] = (prob, ba_from_probs(y, g, prob, inclusive=False, min_face=mf, min_tree=mt))",
+                      "out[m] = (prob, ba_from_probs(y, g, prob, inclusive=True, min_face=mf, min_tree=mt))")]),
+    "panel: first seed only instead of the seed mean": (
+        "panel.py", [("return np.mean(rows, axis=0), np.array(rows), tests, ba, auc_rows",
+                      "return rows[0], np.array(rows), tests, ba, auc_rows")]),
+    "panel: completeness gate vacuous": (
+        "panel.py", [("return bool(np.isnan(prob[~planned]).all() and ((prob[planned] >= 0) & (prob[planned] <= 1)).all())", "return True")]),
+    "panel: drop-one seeds from the follow-up rule": (
+        "panel.py", [("seed0 = eegnet_seed(\"montage\", \"joint\", s, 0)", "seed0 = eegnet_seed(\"transient\", \"joint\", s, 0)")]),
+    "panel: absent member not counted in its family": (
+        "panel.py", [("    adj = inference.holm_frozen(pv, m)", "    adj = inference.holm_frozen(pv, len(pv))")]),
+    "inference: frozen Holm shrinks to the present members": (
+        "inference.py", [("full = np.concatenate([np.where(np.isfinite(p), p, 1.0), np.ones(m - p.size)])",
+                          "full = np.where(np.isfinite(p), p, np.nan)")]),
+    "nested: inner training includes the inner test participants": (
+        "nested.py", [("tr = src & ~inH & (sg == other)", "tr = src & (sg == other)")]),
+    "nested: outer participant enters selection": (
+        "nested.py", [("src = (g != p) & np.isin(sg, R)", "src = np.isin(sg, R)")]),
+    "nested: ties go to the later configuration": (
+        "nested.py", [("if scores[i] > scores[best] + tie:", "if scores[i] >= scores[best] - tie:")]),
+    "regimes: adaptive draw rule never extends": (
+        "regimes.py", [("\"extended\": bool(se > rule[\"mc_se_threshold\"])}", "\"extended\": False}")]),
+    "pipeline: raw-stack free flag inverted": (
+        "pipeline.py", [("free.append(np.logical_not(fl_any[keep]))", "free.append(fl_any[keep])")]),
+    "regimes: montage folds reserve empty indexes": (
+        "regimes.py", [("if not compact_joint or te.any():", "if True:")]),
+    "regimes: scalar predictions silently broadcast": (
+        "regimes.py", [('if prob.shape != (n_test,):', 'if False:')]),
+    "inference: finite inversion at insufficient resolution": (
+        "inference.py", [('if alpha <= 2.0 ** (1 - d.size):', 'if False:')]),
+    "nested: nonfinite inner probabilities accepted": (
+        "nested.py", [('if not ((pred >= 0) & (pred <= 1)).all():', 'if False:')]),
+    "sensitivities: photo occurrences used as presence": (
+        "sensitivities.py", [('np.bincount(j, minlength=len(photos))', 'np.bincount(j, minlength=len(photos)) > 0')]),
+    "sensitivities: previous-epoch feature ignores transient flag": (
+        "sensitivities.py", [('= y[rows[:-1]], flag[rows[:-1]]', '= y[rows[:-1]], False')]),
+    "clock: alternative pulse offsets ignored": (
+        "clock.py", [('or margin < minimum_margin', 'or False')]),
 }
 
 

@@ -1,69 +1,65 @@
-# Quick start
+# Quickstart
 
-Nothing below installs, downloads or uploads anything. No data are shipped: the analysis scripts need your own
-authorized epoch file and otherwise stop with `DATA_NOT_PROVIDED`.
+Run these commands from the repository root with an existing Python
+environment that has the dependencies in `pyproject.toml`.
 
-## 1. Environment
+## Generate a synthetic epoch file
 
-* Python ≥ 3.10 (tested: 3.11.15).
-* Required: `numpy` (tested 1.26.4), `scipy` (1.16.0), `scikit-learn` (1.6.1).
-* Optional: `torch` (2.9.1; EEGNet), `mne` (1.11.0; FIR filter), `pytest` (9.1.1).
-
-The repository never installs packages. If something is missing, the code raises
-`BLOCKED_MISSING_DEPENDENCY: '<package>' is required for ...` and the corresponding tests are skipped with the same
-reason. To add a dependency yourself, use your own environment manager, e.g. `pip install "torch>=2.0"`
-(or install the package with an extra: `pip install -e ".[eegnet,filter,test]"`).
-
-Multithreaded BLAS is much slower than one thread for the small solves inside shrinkage LDA on many-core
-machines; the LDA fit therefore limits BLAS to one thread internally (via `threadpoolctl`, which scikit-learn
-installs), and the scripts and tests also set `OPENBLAS_NUM_THREADS=1` when it is unset.
-
-## 2. Run the tests (synthetic, optional)
+Choose an existing output directory outside this checkout. Keep the file
+there with the analysis outputs.
 
 ```bash
-cd EarEEG-Frontal-Decoder-Repro
-python -m pytest -q
+export EAREEG_SCRATCH="$(mktemp -d)"
+PYTHONPATH=src python - <<'PY'
+import os
+from pathlib import Path
+from eareeg_decoder.data import save_epochs
+from eareeg_decoder.synthetic import synthetic_epochs
+
+epochs, _ = synthetic_epochs(n_participants=10, n_streams=10, seed=33, neural_amp=6.0)
+save_epochs(epochs, Path(os.environ["EAREEG_SCRATCH"]) / "synthetic.npz")
+PY
+python scripts/eareeg_check_data.py --data "$EAREEG_SCRATCH/synthetic.npz" --i-am-authorized
 ```
 
-`pytest` finds the package through `pythonpath = ["src"]` in `pyproject.toml`. Select groups with markers, e.g.
-`python -m pytest -q -m "lda and joint"` (markers: `lda`, `eegnet`, `joint`, `loso`, `sensitivity`, `oracle`).
-The tests were not re-run for `v0.1.0` (see [VALIDATION.md](VALIDATION.md)).
+## Run the comparative decoder methods
 
-## 3. Data check and analyses
+These commands use the deterministic xDAWN-TS-LR decoder. The shortened draw
+and bootstrap settings are for exercising the code. Omit them to use the
+frozen defaults. The nested command fits all four settings in all eligible
+inner folds for both montages and takes longer.
 
 ```bash
-python scripts/eareeg_check_data.py ; echo "exit=$?"
+python scripts/eareeg_analyze.py --data "$EAREEG_SCRATCH/synthetic.npz" --i-am-authorized \
+  --analysis panel_drop_one --decoder xdawn_ts_lr --n-boot 100 \
+  --out "$EAREEG_SCRATCH/ablation.json"
+python scripts/eareeg_analyze.py --data "$EAREEG_SCRATCH/synthetic.npz" --i-am-authorized \
+  --analysis panel_regimes --decoder xdawn_ts_lr --draws 1 --n-boot 100 --min-face 10 --min-tree 3 \
+  --out "$EAREEG_SCRATCH/transfer.json"
+python scripts/eareeg_analyze.py --data "$EAREEG_SCRATCH/synthetic.npz" --i-am-authorized \
+  --analysis panel_nested --decoder xdawn_ts_lr --n-boot 100 --min-face 10 --min-tree 3 \
+  --out "$EAREEG_SCRATCH/nested.json"
 ```
 
-prints `DATA_NOT_PROVIDED` and `exit=3`. With your own authorized file, kept **outside** the repository:
+The decoder choices also include `eegnet_step1`, `eeg_inception_erp` and `all`
+(the default). The network default device is CPU. Select a supported device
+with `--device`. The full neural suite can require substantial computation.
+A partial model run preserves every family position and marks omitted
+members `INCOMPLETE`.
 
-```bash
-python scripts/eareeg_check_data.py --data ../my_data/epochs.npz --i-am-authorized
-python scripts/eareeg_analyze.py --data ../my_data/epochs.npz --i-am-authorized --analysis drop_one   --out ../my_results/drop_one.json
-python scripts/eareeg_analyze.py --data ../my_data/epochs.npz --i-am-authorized --analysis transients --out ../my_results/transients.json
-python scripts/eareeg_analyze.py --data ../my_data/epochs.npz --i-am-authorized --analysis regimes    --out ../my_results/regimes_loso.json
-python scripts/eareeg_analyze.py --data ../my_data/epochs.npz --i-am-authorized --analysis regimes --joint --out ../my_results/regimes_joint.json
-python scripts/eareeg_analyze.py --help
-```
+## Run other analyses
 
-Exit codes: 0 success, 2 argument error, 3 `DATA_NOT_PROVIDED`, 4 schema error, 6 refused output path (inside the
-repository, missing directory, or existing file without `--overwrite`).
+Change `--analysis` and choose a new output filename for each command.
 
-See [DATA_ACCESS.md](DATA_ACCESS.md) for the file format.
+- `regimes --joint` gives the joint LDA reference. It defaults to 20 draws.
+  Use `--adaptive-draws` for the optional Monte Carlo extension.
+- `network_regimes --device cpu --offsets 0 --draws 1` exercises the follow-up
+  EEGNet configuration. The subset of offsets and draws is for smoke testing.
+- `weighted_gap --n-boot 100` uses the tree-photograph key and a common free test mask.
+- `stream_history --repetitions 3` requires stream and position.
+- `permutation_check --repetitions 3 --min-face 10 --min-tree 3` refits the LDA
+  procedure on synthetic permutations.
 
-## 4. Using the library
-
-Analyses without a command-line entry point (network, follow-up variants; see the README) are called from your own
-script. Without installing, run from the repository root with the source on the path, e.g.
-`PYTHONPATH=src python my_script.py`. The pattern below uses a synthetic cohort only so that it runs without data:
-
-```python
-from eareeg_decoder import inference, pipeline, regimes, synthetic
-
-es, _ = synthetic.synthetic_epochs(n_participants=8, seed=0)        # SYNTHETIC; use data.load_authorized_epochs(...) for real data
-S = pipeline.build_stack(es)                                         # features, labels, free flags
-res = regimes.lda_regimes(S.F, S.y, S.g, S.free, n_draws=20)         # LOSO; pass S.sg for joint hold-out
-d = res.decomposition                                                # delta = c + s per participant
-print(inference.paired_summary(d["delta"], n_boot=20000, seed=20261117))
-print(inference.signflip_inversion_ci(d["delta"]))
-```
+JSON contains cohort summaries by default. Undefined statistics are `null`.
+Output files are owner-only and the path must be outside the checkout. For
+authorized study input, follow the [data contract](DATA_ACCESS.md).

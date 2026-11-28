@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.0
+
+- Added comparative electrode ablation, fixed transfer comparisons and joint
+  source-only nested sensitivity, using two EEGNet configurations, xDAWN-TS-LR
+  and EEG-Inception ERP alongside the LDA reference.
+- Added photograph-weighted bootstrap, previous-presentation rotations,
+  within-participant label permutation, a synthetic amplitude-truncation
+  scenario and generic cross-device and tracker helpers.
+- Added optional LDA draw extension, explicit prediction completeness,
+  per-method fold indexing, strict JSON and owner-only atomic CLI outputs.
+
 ## 0.1.0 — first public release (2026-11-24)
 
 Experimental code for the methods of the manuscript (in preparation). Same algorithm code as the private release

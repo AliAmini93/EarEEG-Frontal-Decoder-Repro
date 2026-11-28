@@ -139,3 +139,13 @@ def synthetic_continuous(n_events: int = 40, sfreq: float = 500.0, seed: int = 0
     for o in onsets:
         data += 10.0 * np.exp(-0.5 * ((t - o - 0.3) / 0.03) ** 2)
     return {"data": data, "sfreq": sfreq, "onsets_s": onsets, "names": list(mt.EAR_CHANNELS)}
+
+
+def truncation_scenario(n_participants: int = 8, n_streams: int = 20, seed: int = 0):
+    """Synthetic class-dependent event rates and log-normal amplitudes.
+
+    A transient threshold applied after generation selects part of the
+    amplitude distribution. There is no simulated neural category effect.
+    """
+    return synthetic_epochs(n_participants=n_participants, n_streams=n_streams, seed=seed,
+                            blink_rate=(0.35, 0.10), blink_amp=100.0, blink_amp_sigma_log=0.5)

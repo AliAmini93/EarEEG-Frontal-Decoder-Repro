@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "eareeg-frontal-decoder-repro"
-version = "0.1.0"
+version = "0.2.0"
 description = "Experimental code for ear-centred EEG montage comparisons, blink-like-transient analyses and LDA/EEGNet face-versus-tree decoding (no data or figures)"
 readme = "README.md"
 requires-python = ">=3.10"

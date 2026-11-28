@@ -86,6 +86,10 @@ def signflip_inversion_ci(values: Sequence[float] | np.ndarray, alpha: float = 0
         return float("nan"), float("nan")
     if d.size > MAX_EXACT_N:
         raise ValueError(f"exact sign-flip inversion limited to n <= {MAX_EXACT_N}")
+    if not 0 < alpha < 1:
+        raise ValueError("alpha must lie strictly between 0 and 1")
+    if alpha <= 2.0 ** (1 - d.size):
+        return -float("inf"), float("inf")
     m = d.mean()
     span = np.ptp(d) + 1e-9
 
@@ -113,6 +117,19 @@ def holm(pvalues: Sequence[float] | np.ndarray) -> np.ndarray:
         running = max(running, min(1.0, (m - rank) * p[i]))
         out[i] = running
     return out
+
+
+def holm_frozen(pvalues: Sequence[float | None] | np.ndarray, m: int) -> np.ndarray:
+    """Holm over a FROZEN family size ``m``: an absent or incomplete member (None/NaN) counts as p = 1, so the family
+    never shrinks when a member is missing (unlike :func:`holm`, which drops NaN entries from m). Returns adjusted p
+    for the given members (in input order); absent members get NaN."""
+    p = np.array([np.nan if v is None else float(v) for v in pvalues], dtype=float)
+    if p.size > m:
+        raise ValueError("more members than the frozen family size")
+    full = np.concatenate([np.where(np.isfinite(p), p, 1.0), np.ones(m - p.size)])
+    adj = holm(full)[:p.size]
+    adj[~np.isfinite(p)] = np.nan
+    return adj
 
 
 def paired_summary(values: Sequence[float] | np.ndarray, n_boot: int, seed: int, test: bool = True,

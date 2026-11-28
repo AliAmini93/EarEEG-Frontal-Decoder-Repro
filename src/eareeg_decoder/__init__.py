@@ -18,11 +18,15 @@ inference      participant bootstrap, exact sign-flip, Holm, test-inversion CI, 
 data           fail-closed adapter for authorized data (DATA_NOT_PROVIDED otherwise)
 pipeline       helpers chaining the steps
 synthetic      explicitly synthetic cohorts
+xdawn          xDAWN-TS-LR decoder (candidate 0.2.0; NumPy/SciPy/scikit-learn only)
+inception      EEG-Inception ERP network (candidate 0.2.0; optional PyTorch)
+panel          post hoc decoder panel: drop-one and transfer-gap orchestration, frozen families (candidate)
+nested         source-only nested tuning sensitivity (candidate)
 """
 from .config import PROTOCOL, protocol
 from .errors import DataNotProvidedError, LeakageError, MissingDependencyError, SchemaError
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 __all__ = ["PROTOCOL", "protocol", "DataNotProvidedError", "LeakageError", "MissingDependencyError", "SchemaError",
            "__version__"]

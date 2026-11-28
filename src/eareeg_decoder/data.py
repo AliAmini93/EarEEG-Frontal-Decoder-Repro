@@ -28,6 +28,7 @@ key                 shape / dtype               meaning
 from __future__ import annotations
 
 import os
+from zipfile import BadZipFile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -141,17 +142,25 @@ def load_authorized_epochs(path: str | os.PathLike | None = None, *, attest_auth
     p = Path(path)
     if not p.is_file():
         raise DataNotProvidedError("the supplied data path is not a readable file. Nothing was read.")
-    with np.load(p, allow_pickle=False) as z:
-        absent = [k for k in REQUIRED_KEYS if k not in z.files]
-        if absent:
-            raise SchemaError(f"data file lacks required keys: {absent}")
-        kw = {k: z[k] for k in REQUIRED_KEYS}
-        for k in OPTIONAL_KEYS:
-            kw[k] = z[k] if k in z.files else None
-    es = EpochSet(X=kw["X"].astype(float), channel_names=[str(c) for c in kw["channel_names"]],
-                  times=kw["times"].astype(float), y=kw["y"], participant=kw["participant"],
-                  stimulus_key=kw["stimulus_key"].astype(str), keep=kw["keep"], stream=kw["stream"],
-                  position=kw["position"], onset_s=kw["onset_s"])
+    try:
+        loaded = np.load(p, allow_pickle=False)
+        if not isinstance(loaded, np.lib.npyio.NpzFile):
+            raise SchemaError("expected a NumPy NPZ archive")
+        with loaded as z:
+            absent = [k for k in REQUIRED_KEYS if k not in z.files]
+            if absent:
+                raise SchemaError(f"data file lacks required keys: {absent}")
+            kw = {k: z[k] for k in REQUIRED_KEYS}
+            for k in OPTIONAL_KEYS:
+                kw[k] = z[k] if k in z.files else None
+        es = EpochSet(X=kw["X"].astype(float), channel_names=[str(c) for c in kw["channel_names"]],
+                      times=kw["times"].astype(float), y=kw["y"], participant=kw["participant"],
+                      stimulus_key=kw["stimulus_key"].astype(str), keep=kw["keep"], stream=kw["stream"],
+                      position=kw["position"], onset_s=kw["onset_s"])
+    except SchemaError:
+        raise
+    except (ValueError, TypeError, OSError, EOFError, BadZipFile) as exc:
+        raise SchemaError("invalid NPZ epoch archive or array dtype") from exc
     validate(es, strict_grid=strict_grid)
     return es
 
